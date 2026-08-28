@@ -1,0 +1,9 @@
+{
+  "name": "usakti-padel-bracket-manager",
+  "private": true,
+  "version": "1.0.0",
+  "description": "IKA FH USAKTI Padel Tournament 2026 — live Bracket Manager (player view + admin scoring).",
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0"
+  }
+}
