@@ -234,17 +234,6 @@
   }
   .admin-btn:hover { color: var(--accent-soft); border-color: var(--accent); }
 
-  .pin-modal { position: fixed; inset: 0; z-index: 60; display: none; align-items: center; justify-content: center; background: rgba(5,7,12,0.72); backdrop-filter: blur(3px); }
-  .pin-modal.show { display: flex; }
-  .pin-box { background: var(--surface); border: 1px solid var(--line-strong); border-radius: 3mm; padding: 6mm; width: 84mm; max-width: 90vw; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
-  .pin-title { font-family: "Bebas Neue", sans-serif; font-size: 16pt; margin-bottom: 1mm; }
-  .pin-sub { font-size: 8.4pt; color: var(--ink-muted); margin: 0 0 4mm; }
-  .pin-input { width: 100%; background: var(--surface-2); border: 1px solid var(--line-strong); border-radius: 1.6mm; color: var(--ink); font-size: 12pt; letter-spacing: 0.15em; text-align: center; padding: 2.6mm; }
-  .pin-input:focus { border-color: var(--accent); outline: none; }
-  .pin-actions { display: flex; gap: 2.4mm; margin-top: 4mm; }
-  .pin-btn { flex: 1; background: var(--accent); color: var(--accent-ink); border: none; border-radius: 1.6mm; font-weight: 700; font-size: 8.6pt; text-transform: uppercase; letter-spacing: 0.04em; padding: 2.4mm; }
-  .pin-btn.ghost { background: var(--surface-2); color: var(--ink-muted); border: 1px solid var(--line-strong); }
-
   @media (max-width: 640px) {
     .topbar-row { gap: 2mm; }
     .topbar-actions { gap: 1.6mm; flex-wrap: wrap; justify-content: flex-end; }
@@ -265,7 +254,7 @@
     </div>
     <div class="topbar-actions">
       <span class="pill mode-pill" id="mode-pill">Player</span>
-      <button class="admin-btn" id="admin-btn" type="button">Login Admin</button>
+      <button class="admin-btn" id="admin-btn" type="button">Mode Admin</button>
       <div class="live-clock"><span class="live-dot"></span><span id="live-clock-text">--.-- WIB</span></div>
     </div>
   </div>
@@ -280,17 +269,6 @@
   <span>IKA FH USAKTI Padel Tournament 2026 &middot; Sabtu, 29 Agustus 2026</span>
   <span>MS Padel JDC, Slipi, Jakarta Pusat &middot; 6 Lapangan</span>
 </footer>
-<div class="pin-modal" id="pin-modal">
-  <div class="pin-box">
-    <div class="pin-title">Login Admin</div>
-    <p class="pin-sub">Masukkan PIN panitia untuk bisa input skor.</p>
-    <input type="password" inputmode="numeric" id="pin-input" class="pin-input" placeholder="PIN" autocomplete="off">
-    <div class="pin-actions">
-      <button class="pin-btn ghost" data-action="pin-cancel" type="button">Batal</button>
-      <button class="pin-btn" data-action="pin-submit" type="button">Masuk</button>
-    </div>
-  </div>
-</div>
 <script id="state-data" type="application/json">{"groupScores":{"A":{},"B":{},"C":{},"D":{},"W":{}},"koScores":{}}</script>
 <script id="app-script">
 const SCHEDULE = {
@@ -1611,81 +1589,26 @@ function showToast(msg, isErr) {
   setTimeout(() => { t.remove(); }, 3200);
 }
 
-/* ================= Admin mode ================= */
-const PIN_STORAGE_KEY = 'usakti_padel_bm_admin_pin';
-let adminPin = null;
-try { adminPin = localStorage.getItem(PIN_STORAGE_KEY); } catch (e) { adminPin = null; }
-isReadOnly = true; // default: player view (isReadOnly already declared in appscript.js)
+/* ================= Admin mode (no PIN — plain toggle) ================= */
+const ADMIN_STORAGE_KEY = 'usakti_padel_bm_admin_mode';
+try { isReadOnly = localStorage.getItem(ADMIN_STORAGE_KEY) !== '1'; } catch (e) { isReadOnly = true; }
 
 function refreshAdminUI() {
   const btn = document.getElementById('admin-btn');
   const modePill = document.getElementById('mode-pill');
-  if (btn) btn.textContent = isReadOnly ? 'Login Admin' : 'Logout Admin';
+  if (btn) btn.textContent = isReadOnly ? 'Mode Admin' : 'Mode Player';
   if (modePill) {
     modePill.textContent = isReadOnly ? '\ud83d\udc41 Player' : '\u2713 Admin';
     modePill.className = 'pill mode-pill' + (isReadOnly ? '' : ' good');
   }
 }
 
-function openPinModal() {
-  const modal = document.getElementById('pin-modal');
-  const input = document.getElementById('pin-input');
-  if (!modal) return;
-  modal.classList.add('show');
-  if (input) { input.value = ''; input.focus(); }
-}
-function closePinModal() {
-  const modal = document.getElementById('pin-modal');
-  if (modal) modal.classList.remove('show');
-}
-
-async function verifyPin(pin) {
-  let res;
-  try {
-    res = await fetch('/.netlify/functions/state', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ pin, verifyOnly: true }),
-    });
-  } catch (e) {
-    return { ok: false, reason: 'network' };
-  }
-  if (res.status === 404) return { ok: false, reason: 'not_deployed' };
-  if (res.status === 500) return { ok: false, reason: 'not_configured' };
-  if (res.status === 401) return { ok: false, reason: 'wrong_pin' };
-  if (!res.ok) return { ok: false, reason: 'other' };
-  return { ok: true };
-}
-
-async function trySetAdmin(pin) {
-  const r = await verifyPin(pin);
-  if (r.ok) {
-    adminPin = pin;
-    try { localStorage.setItem(PIN_STORAGE_KEY, pin); } catch (e) {}
-    isReadOnly = false;
-    refreshAdminUI();
-    render();
-    showToast('Masuk sebagai Admin.');
-    return true;
-  }
-  const messages = {
-    network: 'Tidak bisa terhubung ke server \u2014 cek koneksi internet.',
-    not_deployed: 'Backend (Netlify Function) tidak ditemukan di site ini \u2014 kemungkinan deploy belum menyertakan folder netlify/functions. Coba deploy ulang lewat GitHub import atau Netlify CLI, bukan drag-and-drop.',
-    not_configured: 'Server belum dikonfigurasi \u2014 environment variable ADMIN_PIN belum di-set (atau belum redeploy setelah di-set).',
-    wrong_pin: 'PIN salah.',
-    other: 'Gagal memverifikasi PIN \u2014 coba lagi.',
-  };
-  showToast(messages[r.reason] || messages.other, true);
-  return false;
-}
-
-function logoutAdmin() {
-  adminPin = null;
-  try { localStorage.removeItem(PIN_STORAGE_KEY); } catch (e) {}
-  isReadOnly = true;
+function toggleAdmin() {
+  isReadOnly = !isReadOnly;
+  try { localStorage.setItem(ADMIN_STORAGE_KEY, isReadOnly ? '0' : '1'); } catch (e) {}
   refreshAdminUI();
   render();
-  showToast('Kembali ke mode Player.');
+  showToast(isReadOnly ? 'Kembali ke mode Player.' : 'Mode Admin aktif \u2014 skor bisa diinput.');
 }
 
 /* ================= State sync ================= */
@@ -1700,29 +1623,33 @@ async function fetchState() {
 }
 
 async function saveState(newState, btn) {
-  if (isReadOnly || !adminPin) { showToast('Mode Player \u2014 tidak bisa menyimpan.', true); return; }
+  if (isReadOnly) { showToast('Mode Player \u2014 tidak bisa menyimpan.', true); return; }
   if (btn) btn.disabled = true;
   try {
     const res = await fetch('/.netlify/functions/state', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ pin: adminPin, state: newState }),
+      body: JSON.stringify({ state: newState }),
     });
-    if (res.status === 401) {
-      showToast('Sesi admin tidak valid \u2014 login ulang.', true);
-      logoutAdmin();
-      return;
-    }
     if (!res.ok) {
-      showToast('Gagal menyimpan \u2014 coba lagi.', true);
+      if (res.status === 404) {
+        showToast('Backend belum aktif di site ini \u2014 skor tersimpan di perangkat ini saja untuk sementara.', true);
+      } else {
+        showToast('Gagal menyimpan ke server \u2014 coba lagi.', true);
+      }
       if (btn) btn.disabled = false;
+      // keep the edit visible locally even if the server save failed
+      STATE = newState;
+      render();
       return;
     }
     STATE = await res.json();
     render();
     showToast('Tersimpan.');
   } catch (e) {
-    showToast('Gagal menyimpan \u2014 periksa koneksi.', true);
+    showToast('Gagal terhubung ke server \u2014 skor tersimpan di perangkat ini saja untuk sementara.', true);
+    STATE = newState;
+    render();
     if (btn) btn.disabled = false;
   }
 }
@@ -1765,19 +1692,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   render();
 
-  // If a PIN was already saved in this browser, verify it silently
-  if (adminPin) {
-    const r = await verifyPin(adminPin);
-    if (r.ok) { isReadOnly = false; refreshAdminUI(); render(); }
-    else if (r.reason === 'wrong_pin') { adminPin = null; try { localStorage.removeItem(PIN_STORAGE_KEY); } catch (e) {} }
-    // network / not_deployed / not_configured: keep the stored PIN, just stay read-only for now
-  }
-
   // Poll for updates from other viewers (skip if an input is actively focused)
   setInterval(async () => {
     const active = document.activeElement;
     if (active && (active.tagName === 'INPUT') && active.closest('#app-root')) return;
-    if (document.getElementById('pin-modal').classList.contains('show')) return;
     const loaded2 = await fetchState();
     if (loaded2) {
       const before = JSON.stringify(STATE);
@@ -1799,23 +1717,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
     const adminBtn = e.target.closest('#admin-btn');
-    if (adminBtn) {
-      if (isReadOnly) openPinModal(); else logoutAdmin();
-    }
-  });
-
-  document.getElementById('pin-modal').addEventListener('click', (e) => {
-    if (e.target.id === 'pin-modal' || e.target.closest('[data-action="pin-cancel"]')) { closePinModal(); return; }
-    if (e.target.closest('[data-action="pin-submit"]')) {
-      const input = document.getElementById('pin-input');
-      const pin = (input.value || '').trim();
-      if (!pin) { showToast('Masukkan PIN.', true); return; }
-      trySetAdmin(pin).then(ok => { if (ok) closePinModal(); });
-    }
-  });
-  document.getElementById('pin-input').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { document.querySelector('[data-action="pin-submit"]').click(); }
-    if (e.key === 'Escape') { closePinModal(); }
+    if (adminBtn) { toggleAdmin(); }
   });
 
   document.getElementById('app-root').addEventListener('click', async (e) => {
