@@ -39,16 +39,6 @@ export default async (req) => {
       return json({ error: 'bad_request' }, 400);
     }
 
-    const ADMIN_PIN = process.env.ADMIN_PIN;
-    if (!ADMIN_PIN) return json({ error: 'server_not_configured' }, 500);
-    if (typeof body.pin !== 'string' || body.pin !== ADMIN_PIN) {
-      return json({ error: 'invalid_pin' }, 401);
-    }
-
-    if (body.verifyOnly) {
-      return json({ ok: true });
-    }
-
     if (!validScoreState(body.state)) {
       return json({ error: 'bad_state' }, 400);
     }
